@@ -376,7 +376,7 @@ function listenMembersForRoom(roomId) {
   });
 }
 // ===============================
-// 10. 真实在线老师渲染函数
+// 10. 真实在线老师与学生渲染函数
 // ===============================
 function renderOnlineStaffReal() {
   onlineStaffList.innerHTML = "";
@@ -385,7 +385,11 @@ function renderOnlineStaffReal() {
     member => member.role === "staff" && member.online === true
   );
 
-  onlineCountBadge.textContent = `在线老师 ${onlineStaff.length} 人`;
+  const onlineStudents = members.filter(
+    member => member.role === "student" && member.online === true
+  );
+
+  onlineCountBadge.textContent = `老师 ${onlineStaff.length} 人 / 学生 ${onlineStudents.length} 人`;
 
   if (!onlineStaff.length) {
     onlineStaffList.innerHTML = `
@@ -415,7 +419,9 @@ function updateCurrentRoomInfo(roomId, roomInfo = {}) {
   roomSubtitle.textContent = roomInfo.category
     ? `房间分类：${roomInfo.category}`
     : "请选择左侧房间进入咨询";
-  roomIdBadge.textContent = `Room ID: ${roomId || "-"}`;
+  roomIdBadge.textContent = roomInfo.name
+    ? `当前房间：${roomInfo.name}`
+    : "当前房间：-";
 }
 
 // ===============================
