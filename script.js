@@ -414,8 +414,18 @@ function renderOnlineStaffReal() {
 async function detectLanguage(text) {
   const prompt = `
 Identify the language of the user's message.
-Only return one language code from this list:
-zh, ko, en, uz, mn
+Return only one code from this list:
+zh
+ko
+en
+uz
+mn
+
+Rules:
+1. Output only the code.
+2. No explanation.
+3. No punctuation.
+4. No extra words.
 `;
 
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -433,6 +443,26 @@ zh, ko, en, uz, mn
       ]
     })
   });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`语言识别失败：${response.status} ${errText}`);
+  }
+
+  const data = await response.json();
+  let lang = data.choices?.[0]?.message?.content?.trim().toLowerCase() || "";
+
+  // 清洗返回内容，防止出现 "ko."、"Korean"、"The answer is ko"
+  lang = lang.replace(/[^a-z]/g, "");
+
+  if (lang.includes("korean")) lang = "ko";
+  if (lang.includes("chinese")) lang = "zh";
+  if (lang.includes("english")) lang = "en";
+  if (lang.includes("uzbek")) lang = "uz";
+  if (lang.includes("mongolian")) lang = "mn";
+
+  return ["zh", "ko", "en", "uz", "mn"].includes(lang) ? lang : "zh";
+}
 
   const data = await response.json();
   const lang = data.choices?.[0]?.message?.content?.trim();
@@ -479,17 +509,18 @@ sendBtn.addEventListener("click", async () => {
   sendBtn.textContent = "翻译中...";
 
   try {
-    const detectedLang = await detectLanguage(text);
+  const detectedLang = await detectLanguage(text);
+console.log("detectedLang =", detectedLang, "text =", text);
 
-    const newMessage = {
-      senderName: currentUser.name,
-      senderRole: currentUser.role,
-      originalText: text,
-      originalLanguage: detectedLang,
-      translations: await buildTranslations(text, detectedLang),
-      time: getCurrentTime(),
-      createdAt: Date.now()
-    };
+const newMessage = {
+  senderName: currentUser.name,
+  senderRole: currentUser.role,
+  originalText: text,
+  originalLanguage: detectedLang,
+  translations: await buildTranslations(text, detectedLang),
+  time: getCurrentTime(),
+  createdAt: Date.now()
+};
 
     await sendMessageToFirebase(newMessage);
     messageInput.value = "";
