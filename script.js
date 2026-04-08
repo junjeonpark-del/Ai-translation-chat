@@ -42,7 +42,6 @@ const roomCategoryInput = document.getElementById("roomCategoryInput");
 const createRoomBtn = document.getElementById("createRoomBtn");
 const roomList = document.getElementById("roomList");
 const targetLanguage = document.getElementById("targetLanguage");
-const enterRoomBtn = document.getElementById("enterRoomBtn");
 
 const currentRole = document.getElementById("currentRole");
 const currentName = document.getElementById("currentName");
@@ -335,18 +334,23 @@ item.addEventListener("click", () => {
 // 10. 进入房间函数
 // ===============================
 async function joinRoom(roomId, roomInfo = {}) {
-  if (!currentUser.name) {
+  const name = nameInput.value.trim();
+
+  if (!name) {
     alert("请先输入姓名");
     return;
   }
 
-  currentRoomId = roomId;
-  currentUser.entered = true;
-  updateCurrentRoomInfo(roomId, roomInfo);
+  currentUser = {
+    id: currentUser.id || ("user_" + Date.now()),
+    role: roleSelect.value,
+    name,
+    targetLang: targetLanguage.value,
+    entered: true
+  };
 
-  if (!currentUser.id) {
-    currentUser.id = "user_" + Date.now();
-  }
+  currentRoomId = roomId;
+  updateCurrentRoomInfo(roomId, roomInfo);
 
   await set(ref(db, `rooms/${roomId}/members/${currentUser.id}`), {
     name: currentUser.name,
@@ -360,6 +364,7 @@ async function joinRoom(roomId, roomInfo = {}) {
   listenMembersForRoom(roomId);
 
   updateCurrentUserInfo();
+  renderMessages();
   alert("已进入房间");
 }
 // ===============================
@@ -485,26 +490,6 @@ Rules:
 // ===============================
 // 10. 事件
 // ===============================
-enterRoomBtn.addEventListener("click", () => {
-  const name = nameInput.value.trim();
-
-  if (!name) {
-    alert("请输入姓名或昵称。");
-    return;
-  }
-
-currentUser = {
-  id: currentUser.id || ("user_" + Date.now()),
-  role: roleSelect.value,
-  name,
-  targetLang: targetLanguage.value,
-  entered: false
-};
-
-  updateCurrentUserInfo();
-  renderMessages();
-  alert("已进入固定咨询房间。");
-});
 
 sendBtn.addEventListener("click", async () => {
   if (!currentUser.entered) {
