@@ -447,19 +447,20 @@ function listenMembersForRoom(roomId) {
       ...data[key]
     }));
     renderOnlineStaffReal();
-    function hasOnlineStaff() {
+  });
+}
+function hasOnlineStaff() {
   const now = Date.now();
   const ACTIVE_LIMIT = 2 * 60 * 1000; // 2分钟内算在线
 
   return members.some(member => {
     const lastActiveAt = member.lastActiveAt || member.joinedAt || 0;
+
     return (
       member.role === "staff" &&
       member.online === true &&
-      now - lastActiveAt < ACTIVE_LIMIT
+      (now - lastActiveAt < ACTIVE_LIMIT)
     );
-  });
-}
   });
 }
 // ===============================
