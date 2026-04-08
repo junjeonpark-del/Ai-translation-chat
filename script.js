@@ -390,8 +390,8 @@ async function joinRoom(roomId, roomInfo = {}) {
       console.error("心跳更新失败", e);
     }
   }, 30000); // 每30秒更新一次
+ }
 }
-
   currentUser = {
     id: currentUser.id || localStorage.getItem("consult_user_id") || ("user_" + Date.now()),
     role: roleSelect.value,
