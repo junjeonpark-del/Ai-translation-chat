@@ -377,7 +377,20 @@ async function joinRoom(roomId, roomInfo = {}) {
   // 如果之前已经在别的房间，先把旧房间中的自己标记离线
   if (currentRoomId && currentUser.id && currentRoomId !== roomId) {
     await markCurrentUserOffline();
-  }
+    function startPresenceHeartbeat() {
+    setInterval(async () => {
+    if (!currentRoomId || !currentUser.id) return;
+
+    try {
+      await update(ref(db, `rooms/${currentRoomId}/members/${currentUser.id}`), {
+        online: true,
+        lastActiveAt: Date.now()
+      });
+    } catch (e) {
+      console.error("心跳更新失败", e);
+    }
+  }, 30000); // 每30秒更新一次
+}
 
   currentUser = {
     id: currentUser.id || localStorage.getItem("consult_user_id") || ("user_" + Date.now()),
@@ -395,12 +408,13 @@ async function joinRoom(roomId, roomInfo = {}) {
   updateCurrentRoomInfo(roomId, roomInfo);
 
   await set(ref(db, `rooms/${roomId}/members/${currentUser.id}`), {
-    name: currentUser.name,
-    role: currentUser.role,
-    targetLang: currentUser.targetLang,
-    online: true,
-    joinedAt: Date.now()
-  });
+  name: currentUser.name,
+  role: currentUser.role,
+  targetLang: currentUser.targetLang,
+  online: true,
+  joinedAt: Date.now(),
+  lastActiveAt: Date.now()
+});
   currentRoomMemberRef = ref(db, `rooms/${roomId}/members/${currentUser.id}`);
   listenMessagesForRoom(roomId);
   listenMembersForRoom(roomId);
@@ -441,13 +455,16 @@ function listenMembersForRoom(roomId) {
 function renderOnlineStaffReal() {
   onlineStaffList.innerHTML = "";
 
-  const onlineStaff = members.filter(
-    member => member.role === "staff" && member.online === true
-  );
+  const now = Date.now();
+  const ACTIVE_LIMIT = 2 * 60 * 1000; // 2分钟内算在线
 
-  const onlineStudents = members.filter(
-    member => member.role === "student" && member.online === true
-  );
+  const activeMembers = members.filter(member => {
+    const lastActiveAt = member.lastActiveAt || member.joinedAt || 0;
+    return member.online === true && (now - lastActiveAt < ACTIVE_LIMIT);
+  });
+
+  const onlineStaff = activeMembers.filter(member => member.role === "staff");
+  const onlineStudents = activeMembers.filter(member => member.role === "student");
 
   onlineCountBadge.textContent = `老师 ${onlineStaff.length} 人 / 学生 ${onlineStudents.length} 人`;
 
@@ -645,5 +662,6 @@ loadUserFromLocal();
 updateCurrentUserInfo();
 listenRoomList();
 renderMessages();
+startPresenceHeartbeat();
 
 createRoomBtn.addEventListener("click", createRoom);
