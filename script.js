@@ -51,7 +51,9 @@ const currentTargetLang = document.getElementById("currentTargetLang");
 
 const onlineStaffList = document.getElementById("onlineStaffList");
 const onlineCountBadge = document.getElementById("onlineCountBadge");
-
+const roomTitle = document.getElementById("roomTitle");
+const roomSubtitle = document.getElementById("roomSubtitle");
+const roomIdBadge = document.getElementById("roomIdBadge");
 const chatMessages = document.getElementById("chatMessages");
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
@@ -318,9 +320,9 @@ function listenRoomList() {
         <span class="online-badge">进入</span>
       `;
 
-      item.addEventListener("click", () => {
-        joinRoom(roomId);
-      });
+item.addEventListener("click", () => {
+  joinRoom(roomId, room);
+});
 
       roomList.appendChild(item);
     });
@@ -330,7 +332,7 @@ function listenRoomList() {
 // ===============================
 // 10. 进入房间函数
 // ===============================
-async function joinRoom(roomId) {
+async function joinRoom(roomId, roomInfo = {}) {
   if (!currentUser.name) {
     alert("请先输入姓名");
     return;
@@ -338,6 +340,7 @@ async function joinRoom(roomId) {
 
   currentRoomId = roomId;
   currentUser.entered = true;
+  updateCurrentRoomInfo(roomId, roomInfo);
 
   if (!currentUser.id) {
     currentUser.id = "user_" + Date.now();
@@ -406,6 +409,13 @@ function renderOnlineStaffReal() {
     `;
     onlineStaffList.appendChild(item);
   });
+}
+function updateCurrentRoomInfo(roomId, roomInfo = {}) {
+  roomTitle.textContent = roomInfo.name || "未进入房间";
+  roomSubtitle.textContent = roomInfo.category
+    ? `房间分类：${roomInfo.category}`
+    : "请选择左侧房间进入咨询";
+  roomIdBadge.textContent = `Room ID: ${roomId || "-"}`;
 }
 
 // ===============================
