@@ -537,4 +537,14 @@ textarea:focus {
   .sidebar.mobile-open {
     display: flex;
   }
+
+    .chat-section {
+    gap: 12px;
+  }
+
+  .chat-input {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+  }
 }
