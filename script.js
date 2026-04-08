@@ -432,7 +432,7 @@ async function joinRoom(roomId, roomInfo = {}) {
 
   updateCurrentUserInfo();
   renderMessages();
-  alert("已进入房间");
+  await sendSystemNotice(`${currentUser.name} 已进入房间`);
 }
 // ===============================
 // 10. 房间监听成员
@@ -613,6 +613,30 @@ const newMessage = {
     autoReplyForStudent().catch(console.error);
   }, 800);
 }
+
+    async function sendSystemNotice(text) {
+  if (!currentRoomId) return;
+
+  const noticeMessage = {
+    senderId: "system_notice",
+    senderName: "系统通知",
+    senderRole: "system",
+    originalText: text,
+    originalLanguage: "zh",
+    translations: {
+      zh: text,
+      ko: text,
+      en: text,
+      uz: text,
+      mn: text
+    },
+    time: getCurrentTime(),
+    createdAt: Date.now()
+  };
+
+  await sendMessageToFirebase(noticeMessage);
+}
+    
   } catch (error) {
     console.error(error);
     alert(error.message || "发送失败");
