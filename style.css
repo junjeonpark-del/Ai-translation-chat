@@ -7,12 +7,12 @@ body {
   font-family: "Segoe UI", "Microsoft YaHei", "Noto Sans KR", sans-serif;
   background: #f4f7fb;
   color: #1f2937;
-  height: 100vh;
+  min-height: 100vh;
   overflow: hidden;
 }
 
 .app-shell {
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
@@ -256,8 +256,6 @@ textarea:focus {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  height: 520px;
-  overflow-y: auto;
   padding: 16px;
   background: linear-gradient(to bottom, #f8fbff, #f4f7fb);
 }
@@ -377,8 +375,80 @@ textarea:focus {
 }
 
 @media (max-width: 960px) {
+  body {
+    overflow: auto;
+  }
+
+  .app-shell {
+    min-height: 100dvh;
+  }
+
+  .topbar {
+    padding: 14px 16px;
+    align-items: flex-start;
+    gap: 12px;
+    flex-direction: column;
+  }
+
+  .topbar-left {
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .logo {
+    width: 42px;
+    height: 42px;
+    font-size: 20px;
+  }
+
+  .topbar h1 {
+    font-size: 16px;
+    line-height: 1.3;
+  }
+
+  .topbar p {
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .topbar-right {
+    font-size: 13px;
+  }
+
   .main-layout {
     grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 12px;
+    overflow: visible;
+  }
+
+  .sidebar,
+  .chat-section {
+    overflow: visible;
+    height: auto;
+  }
+
+  .sidebar {
+    padding-right: 0;
+  }
+
+  .panel {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .panel h2 {
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+
+  .panel h3 {
+    font-size: 14px;
+  }
+
+  .form-control,
+  .chat-input textarea {
+    font-size: 16px;
   }
 
   .chat-header {
@@ -387,8 +457,49 @@ textarea:focus {
     gap: 10px;
   }
 
+  .room-meta {
+    width: 100%;
+    gap: 8px;
+  }
+
+  .meta-badge {
+    font-size: 12px;
+    padding: 7px 10px;
+  }
+
+  .chat-messages {
+    min-height: 45vh;
+    max-height: 55vh;
+    padding: 12px;
+  }
+
   .message-card {
     max-width: 100%;
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .message-name {
+    font-size: 13px;
+  }
+
+  .message-text {
+    font-size: 14px;
+  }
+
+  .message-original {
+    font-size: 11px;
+  }
+
+  .quick-buttons {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+  }
+
+  .quick-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .input-bottom {
