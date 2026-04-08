@@ -114,7 +114,8 @@ function renderMessages() {
 
   messages.forEach(message => {
     const card = document.createElement("div");
-    card.className = `message-card ${message.senderRole || "student"}`;
+    const isMine = message.senderId && currentUser.id && message.senderId === currentUser.id;
+    card.className = `message-card ${isMine ? "staff" : "student"}`;
 
     const roleText = message.senderRole === "staff" ? "STAFF" : "STUDENT";
     const displayedText = getDisplayedText(message);
@@ -255,15 +256,16 @@ function listenMessagesForRoom(roomId) {
 async function autoReplyForStudent() {
   const text = "您好，已收到您的咨询，我们会尽快为您解答。";
 
-  const autoReply = {
-    senderName: "国际处值班老师",
-    senderRole: "staff",
-    originalText: text,
-    originalLanguage: "zh",
-    translations: await buildTranslations(text, "zh"),
-    time: getCurrentTime(),
-    createdAt: Date.now()
-  };
+const autoReply = {
+  senderId: "system_staff_auto_reply",
+  senderName: "国际处值班老师",
+  senderRole: "staff",
+  originalText: text,
+  originalLanguage: "zh",
+  translations: await buildTranslations(text, "zh"),
+  time: getCurrentTime(),
+  createdAt: Date.now()
+};
 
   await sendMessageToFirebase(autoReply);
 }
@@ -524,6 +526,7 @@ sendBtn.addEventListener("click", async () => {
 console.log("detectedLang =", detectedLang, "text =", text);
 
 const newMessage = {
+  senderId: currentUser.id,
   senderName: currentUser.name,
   senderRole: currentUser.role,
   originalText: text,
