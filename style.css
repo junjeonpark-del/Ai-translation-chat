@@ -7,10 +7,14 @@ body {
   font-family: "Segoe UI", "Microsoft YaHei", "Noto Sans KR", sans-serif;
   background: #f4f7fb;
   color: #1f2937;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .topbar {
@@ -70,6 +74,9 @@ body {
   grid-template-columns: 320px 1fr;
   gap: 20px;
   padding: 20px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .sidebar,
@@ -77,6 +84,14 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-height: 0;
+  overflow: hidden;
+  height: 100%;
+}
+
+.sidebar {
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .panel {
@@ -238,6 +253,9 @@ textarea:focus {
 }
 
 .chat-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   height: 520px;
   overflow-y: auto;
   padding: 16px;
@@ -312,6 +330,7 @@ textarea:focus {
   padding: 12px;
   font-size: 15px;
   outline: none;
+  flex-shrink: 0;
 }
 
 .input-bottom {
