@@ -123,6 +123,9 @@ function loadUserFromLocal() {
 }
 let messages = [];
 let members = [];
+let stopMessagesListener = null;
+let stopMembersListener = null;
+let presenceHeartbeatStarted = false;
 
 // ===============================
 // 5. UI
@@ -155,21 +158,31 @@ if (isSystem) {
   card.className = `message-card ${isMine ? "staff" : "student"}`;
 }
 
-    const roleText = message.senderRole === "staff" ? "STAFF" : "STUDENT";
+    const roleText =
+  message.senderRole === "system"
+    ? "SYSTEM"
+    : message.senderRole === "staff"
+    ? "STAFF"
+    : "STUDENT";
+    
     const displayedText = getDisplayedText(message);
 
-    card.innerHTML = `
-      <div class="message-top">
-        <span class="message-name">${escapeHtml(message.senderName || "匿名")}</span>
-        <span class="role-tag">${roleText}</span>
-        <span class="message-time">${escapeHtml(message.time || "")}</span>
-      </div>
-      <div class="message-text">${escapeHtml(displayedText)}</div>
-      <div class="message-original">
-        原文（${languageMap[message.originalLanguage] || message.originalLanguage || "-"}）：
-        ${escapeHtml(message.originalText || "")}
-      </div>
-    `;
+card.innerHTML = `
+  <div class="message-top">
+    <span class="message-name">${escapeHtml(message.senderName || "匿名")}</span>
+    <span class="role-tag">${roleText}</span>
+    <span class="message-time">${escapeHtml(message.time || "")}</span>
+  </div>
+  <div class="message-text">${escapeHtml(displayedText)}</div>
+  ${
+    isSystem
+      ? ""
+      : `<div class="message-original">
+          原文（${languageMap[message.originalLanguage] || message.originalLanguage || "-"}）：
+          ${escapeHtml(message.originalText || "")}
+        </div>`
+  }
+`;
 
     chatMessages.appendChild(card);
   });
@@ -266,9 +279,14 @@ async function sendMessageToFirebase(messageObj) {
 }
 
 function listenMessagesForRoom(roomId) {
+  if (stopMessagesListener) {
+    stopMessagesListener();
+    stopMessagesListener = null;
+  }
+
   const currentRoomRef = ref(db, `rooms/${roomId}/messages`);
 
-  onValue(currentRoomRef, snapshot => {
+  stopMessagesListener = onValue(currentRoomRef, snapshot => {
     const data = snapshot.val();
 
     if (!data) {
@@ -286,6 +304,37 @@ function listenMessagesForRoom(roomId) {
 
     renderMessages();
   });
+}
+
+async function markCurrentUserOffline() {
+  if (!currentRoomId || !currentUser.id) return;
+
+  try {
+    await update(ref(db, `rooms/${currentRoomId}/members/${currentUser.id}`), {
+      online: false,
+      lastActiveAt: Date.now()
+    });
+  } catch (e) {
+    console.error("标记离线失败", e);
+  }
+}
+
+function startPresenceHeartbeat() {
+  if (presenceHeartbeatStarted) return;
+  presenceHeartbeatStarted = true;
+
+  setInterval(async () => {
+    if (!currentRoomId || !currentUser.id || !currentUser.entered) return;
+
+    try {
+      await update(ref(db, `rooms/${currentRoomId}/members/${currentUser.id}`), {
+        online: true,
+        lastActiveAt: Date.now()
+      });
+    } catch (e) {
+      console.error("心跳更新失败", e);
+    }
+  }, 30000);
 }
 
 // ===============================
@@ -380,24 +429,10 @@ async function joinRoom(roomId, roomInfo = {}) {
     return;
   }
 
-  // 如果之前已经在别的房间，先把旧房间中的自己标记离线
   if (currentRoomId && currentUser.id && currentRoomId !== roomId) {
     await markCurrentUserOffline();
-    function startPresenceHeartbeat() {
-    setInterval(async () => {
-    if (!currentRoomId || !currentUser.id) return;
+  }
 
-    try {
-      await update(ref(db, `rooms/${currentRoomId}/members/${currentUser.id}`), {
-        online: true,
-        lastActiveAt: Date.now()
-      });
-    } catch (e) {
-      console.error("心跳更新失败", e);
-    }
-  }, 30000); // 每30秒更新一次
- }
-}
   currentUser = {
     id: currentUser.id || localStorage.getItem("consult_user_id") || ("user_" + Date.now()),
     role: roleSelect.value,
@@ -414,39 +449,36 @@ async function joinRoom(roomId, roomInfo = {}) {
   updateCurrentRoomInfo(roomId, roomInfo);
 
   await set(ref(db, `rooms/${roomId}/members/${currentUser.id}`), {
-  name: currentUser.name,
-  role: currentUser.role,
-  targetLang: currentUser.targetLang,
-  online: true,
-  joinedAt: Date.now(),
-  lastActiveAt: Date.now()
-});
+    name: currentUser.name,
+    role: currentUser.role,
+    targetLang: currentUser.targetLang,
+    online: true,
+    joinedAt: Date.now(),
+    lastActiveAt: Date.now()
+  });
+
   currentRoomMemberRef = ref(db, `rooms/${roomId}/members/${currentUser.id}`);
+
   listenMessagesForRoom(roomId);
   listenMembersForRoom(roomId);
-  async function markCurrentUserOffline() {
-  if (!currentRoomId || !currentUser.id) return;
-
-  try {
-    await update(ref(db, `rooms/${currentRoomId}/members/${currentUser.id}`), {
-      online: false
-    });
-  } catch (e) {
-    console.error("标记离线失败", e);
-  }
-}
 
   updateCurrentUserInfo();
   renderMessages();
+
   await sendSystemNotice(`${currentUser.name} 已进入房间`);
 }
 // ===============================
 // 10. 房间监听成员
 // ===============================
 function listenMembersForRoom(roomId) {
+  if (stopMembersListener) {
+    stopMembersListener();
+    stopMembersListener = null;
+  }
+
   const memberRef = ref(db, `rooms/${roomId}/members`);
 
-  onValue(memberRef, snapshot => {
+  stopMembersListener = onValue(memberRef, snapshot => {
     const data = snapshot.val() || {};
     members = Object.keys(data).map(key => ({
       id: key,
