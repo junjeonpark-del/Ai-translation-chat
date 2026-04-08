@@ -464,11 +464,6 @@ Rules:
   return ["zh", "ko", "en", "uz", "mn"].includes(lang) ? lang : "zh";
 }
 
-  const data = await response.json();
-  const lang = data.choices?.[0]?.message?.content?.trim();
-  return ["zh", "ko", "en", "uz", "mn"].includes(lang) ? lang : "zh";
-}
-
 // ===============================
 // 10. 事件
 // ===============================
