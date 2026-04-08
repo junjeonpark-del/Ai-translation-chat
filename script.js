@@ -59,6 +59,8 @@ const sendBtn = document.getElementById("sendBtn");
 const displayLanguageLabel = document.getElementById("displayLanguageLabel");
 
 const quickButtons = document.querySelectorAll(".quick-btn");
+const mobileSidebarToggle = document.getElementById("mobileSidebarToggle");
+const sidebar = document.getElementById("sidebar");
 
 // ===============================
 // 4. 基础数据
@@ -466,6 +468,12 @@ async function joinRoom(roomId, roomInfo = {}) {
   renderMessages();
 
   await sendSystemNotice(`${currentUser.name} 已进入房间`);
+    if (window.innerWidth <= 960 && sidebar) {
+    sidebar.classList.remove("mobile-open");
+    if (mobileSidebarToggle) {
+      mobileSidebarToggle.textContent = "房间与身份设置";
+    }
+  }
 }
 // ===============================
 // 10. 房间监听成员
@@ -739,5 +747,14 @@ updateCurrentUserInfo();
 listenRoomList();
 renderMessages();
 startPresenceHeartbeat();
+if (mobileSidebarToggle && sidebar) {
+  mobileSidebarToggle.addEventListener("click", () => {
+    sidebar.classList.toggle("mobile-open");
+
+    mobileSidebarToggle.textContent = sidebar.classList.contains("mobile-open")
+      ? "收起房间与身份设置"
+      : "房间与身份设置";
+  });
+}
 
 createRoomBtn.addEventListener("click", createRoom);
