@@ -88,6 +88,39 @@ let currentUser = {
 };
 
 let currentRoomId = null;
+let currentRoomInfo = null;
+let currentRoomMemberRef = null;
+
+function saveUserToLocal() {
+  localStorage.setItem("consult_user", JSON.stringify({
+    id: currentUser.id,
+    role: currentUser.role,
+    name: currentUser.name,
+    targetLang: currentUser.targetLang
+  }));
+}
+
+function loadUserFromLocal() {
+  const raw = localStorage.getItem("consult_user");
+  if (!raw) return;
+
+  try {
+    const saved = JSON.parse(raw);
+    currentUser = {
+      id: saved.id || "",
+      role: saved.role || "",
+      name: saved.name || "",
+      targetLang: saved.targetLang || "zh",
+      entered: false
+    };
+
+    roleSelect.value = currentUser.role || "student";
+    nameInput.value = currentUser.name || "";
+    targetLanguage.value = currentUser.targetLang || "zh";
+  } catch (e) {
+    console.error("读取本地身份信息失败", e);
+  }
+}
 let messages = [];
 let members = [];
 
@@ -341,15 +374,24 @@ async function joinRoom(roomId, roomInfo = {}) {
     return;
   }
 
+  // 如果之前已经在别的房间，先把旧房间中的自己标记离线
+  if (currentRoomId && currentUser.id && currentRoomId !== roomId) {
+    await markCurrentUserOffline();
+  }
+
   currentUser = {
-    id: currentUser.id || ("user_" + Date.now()),
+    id: currentUser.id || localStorage.getItem("consult_user_id") || ("user_" + Date.now()),
     role: roleSelect.value,
     name,
     targetLang: targetLanguage.value,
     entered: true
   };
 
+  localStorage.setItem("consult_user_id", currentUser.id);
+  saveUserToLocal();
+
   currentRoomId = roomId;
+  currentRoomInfo = roomInfo;
   updateCurrentRoomInfo(roomId, roomInfo);
 
   await set(ref(db, `rooms/${roomId}/members/${currentUser.id}`), {
@@ -359,9 +401,20 @@ async function joinRoom(roomId, roomInfo = {}) {
     online: true,
     joinedAt: Date.now()
   });
-
+  currentRoomMemberRef = ref(db, `rooms/${roomId}/members/${currentUser.id}`);
   listenMessagesForRoom(roomId);
   listenMembersForRoom(roomId);
+  async function markCurrentUserOffline() {
+  if (!currentRoomId || !currentUser.id) return;
+
+  try {
+    await update(ref(db, `rooms/${currentRoomId}/members/${currentUser.id}`), {
+      online: false
+    });
+  } catch (e) {
+    console.error("标记离线失败", e);
+  }
+}
 
   updateCurrentUserInfo();
   renderMessages();
@@ -547,6 +600,7 @@ quickButtons.forEach(button => {
 
 targetLanguage.addEventListener("change", async () => {
   currentUser.targetLang = targetLanguage.value;
+  saveUserToLocal();
   updateCurrentUserInfo();
   renderMessages();
 
@@ -557,9 +611,37 @@ targetLanguage.addEventListener("change", async () => {
   }
 });
 
+roleSelect.addEventListener("change", () => {
+  currentUser.role = roleSelect.value;
+  saveUserToLocal();
+  updateCurrentUserInfo();
+});
+
+nameInput.addEventListener("input", () => {
+  currentUser.name = nameInput.value.trim();
+  saveUserToLocal();
+  updateCurrentUserInfo();
+});
+
 // ===============================
 // 11. 启动
 // ===============================
+window.addEventListener("beforeunload", () => {
+  if (currentRoomId && currentUser.id) {
+    navigator.sendBeacon?.(
+      `${firebaseConfig.databaseURL}rooms/${currentRoomId}/members/${currentUser.id}.json`,
+      JSON.stringify({
+        name: currentUser.name,
+        role: currentUser.role,
+        targetLang: currentUser.targetLang,
+        online: false,
+        joinedAt: Date.now()
+      })
+    );
+  }
+});
+
+loadUserFromLocal();
 updateCurrentUserInfo();
 listenRoomList();
 renderMessages();
