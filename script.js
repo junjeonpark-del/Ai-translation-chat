@@ -3,7 +3,9 @@ import {
   getDatabase,
   ref,
   push,
-  onValue
+  onValue,
+  set,
+  update
 } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-database.js";
 
 // ===============================
@@ -28,14 +30,17 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-const roomRef = ref(db, "rooms/HANLA-001/messages");
+const roomIndexRef = ref(db, "roomIndex");
 
 // ===============================
 // 3. 页面元素
 // ===============================
 const roleSelect = document.getElementById("roleSelect");
 const nameInput = document.getElementById("nameInput");
-const sourceLanguage = document.getElementById("sourceLanguage");
+const roomNameInput = document.getElementById("roomNameInput");
+const roomCategoryInput = document.getElementById("roomCategoryInput");
+const createRoomBtn = document.getElementById("createRoomBtn");
+const roomList = document.getElementById("roomList");
 const targetLanguage = document.getElementById("targetLanguage");
 const enterRoomBtn = document.getElementById("enterRoomBtn");
 
@@ -73,47 +78,21 @@ const languageNameMap = {
   mn: "Mongolian"
 };
 
-const mockStaff = [
-  { id: 1, name: "李老师", lang: "zh", online: true },
-  { id: 2, name: "김선생님", lang: "ko", online: true },
-  { id: 3, name: "John", lang: "en", online: true }
-];
-
 let currentUser = {
+  id: "",
   role: "",
   name: "",
-  sourceLang: "zh",
   targetLang: "zh",
   entered: false
 };
 
+let currentRoomId = null;
 let messages = [];
+let members = [];
 
 // ===============================
 // 5. UI
 // ===============================
-function renderOnlineStaff() {
-  onlineStaffList.innerHTML = "";
-  const onlineOnly = mockStaff.filter(staff => staff.online);
-  onlineCountBadge.textContent = `在线老师 ${onlineOnly.length} 人`;
-
-  onlineOnly.forEach(staff => {
-    const item = document.createElement("div");
-    item.className = "staff-item";
-    item.innerHTML = `
-      <div class="staff-left">
-        <div class="avatar">${staff.name.charAt(0)}</div>
-        <div>
-          <div><strong>${staff.name}</strong></div>
-          <div>${languageMap[staff.lang]}</div>
-        </div>
-      </div>
-      <span class="online-badge">在线</span>
-    `;
-    onlineStaffList.appendChild(item);
-  });
-}
-
 function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str ?? "";
@@ -162,9 +141,9 @@ function updateCurrentUserInfo() {
     ? (currentUser.role === "staff" ? "老师 Staff" : "学生 Student")
     : "未进入";
 
-  currentName.textContent = currentUser.entered ? currentUser.name : "未进入";
-  currentSourceLang.textContent = currentUser.entered ? languageMap[currentUser.sourceLang] : "-";
-  currentTargetLang.textContent = currentUser.entered ? languageMap[currentUser.targetLang] : "-";
+  currentName.textContent = currentUser.name || "未进入";
+  currentSourceLang.textContent = "自动识别";
+  currentTargetLang.textContent = currentUser.targetLang ? languageMap[currentUser.targetLang] : "-";
   displayLanguageLabel.textContent = languageMap[currentUser.targetLang] || "中文";
 }
 
@@ -237,11 +216,18 @@ async function buildTranslations(text, sourceLang) {
 // 7. Firebase 读写
 // ===============================
 async function sendMessageToFirebase(messageObj) {
-  await push(roomRef, messageObj);
+  if (!currentRoomId) {
+    throw new Error("请先进入房间");
+  }
+
+  const currentRoomRef = ref(db, `rooms/${currentRoomId}/messages`);
+  await push(currentRoomRef, messageObj);
 }
 
-function listenMessages() {
-  onValue(roomRef, snapshot => {
+function listenMessagesForRoom(roomId) {
+  const currentRoomRef = ref(db, `rooms/${roomId}/messages`);
+
+  onValue(currentRoomRef, snapshot => {
     const data = snapshot.val();
 
     if (!data) {
@@ -281,7 +267,180 @@ async function autoReplyForStudent() {
 }
 
 // ===============================
-// 9. 事件
+// 9. 创建房间
+// ===============================
+async function createRoom() {
+  const roomName = roomNameInput.value.trim();
+  const roomCategory = roomCategoryInput.value.trim();
+
+  if (!roomName) {
+    alert("请输入房间名称");
+    return;
+  }
+
+  const roomId = "room_" + Date.now();
+
+  await set(ref(db, `rooms/${roomId}/info`), {
+    name: roomName,
+    category: roomCategory || "未分类",
+    createdBy: currentUser.name || "unknown",
+    createdAt: Date.now()
+  });
+
+  await set(ref(db, `roomIndex/${roomId}`), {
+    name: roomName,
+    category: roomCategory || "未分类",
+    createdAt: Date.now()
+  });
+
+  roomNameInput.value = "";
+  roomCategoryInput.value = "";
+}
+
+// ===============================
+// 10. 房间列表监听
+// ===============================
+function listenRoomList() {
+  onValue(roomIndexRef, snapshot => {
+    const data = snapshot.val() || {};
+    roomList.innerHTML = "";
+
+    Object.keys(data).forEach(roomId => {
+      const room = data[roomId];
+      const item = document.createElement("div");
+      item.className = "staff-item";
+      item.style.cursor = "pointer";
+      item.innerHTML = `
+        <div>
+          <div><strong>${escapeHtml(room.name)}</strong></div>
+          <div>${escapeHtml(room.category || "")}</div>
+        </div>
+        <span class="online-badge">进入</span>
+      `;
+
+      item.addEventListener("click", () => {
+        joinRoom(roomId);
+      });
+
+      roomList.appendChild(item);
+    });
+  });
+}
+
+// ===============================
+// 10. 进入房间函数
+// ===============================
+async function joinRoom(roomId) {
+  if (!currentUser.name) {
+    alert("请先输入姓名");
+    return;
+  }
+
+  currentRoomId = roomId;
+  currentUser.entered = true;
+
+  if (!currentUser.id) {
+    currentUser.id = "user_" + Date.now();
+  }
+
+  await set(ref(db, `rooms/${roomId}/members/${currentUser.id}`), {
+    name: currentUser.name,
+    role: currentUser.role,
+    targetLang: currentUser.targetLang,
+    online: true,
+    joinedAt: Date.now()
+  });
+
+  listenMessagesForRoom(roomId);
+  listenMembersForRoom(roomId);
+
+  updateCurrentUserInfo();
+  alert("已进入房间");
+}
+// ===============================
+// 10. 房间监听成员
+// ===============================
+function listenMembersForRoom(roomId) {
+  const memberRef = ref(db, `rooms/${roomId}/members`);
+
+  onValue(memberRef, snapshot => {
+    const data = snapshot.val() || {};
+    members = Object.keys(data).map(key => ({
+      id: key,
+      ...data[key]
+    }));
+    renderOnlineStaffReal();
+  });
+}
+// ===============================
+// 10. 真实在线老师渲染函数
+// ===============================
+function renderOnlineStaffReal() {
+  onlineStaffList.innerHTML = "";
+
+  const onlineStaff = members.filter(
+    member => member.role === "staff" && member.online === true
+  );
+
+  onlineCountBadge.textContent = `在线老师 ${onlineStaff.length} 人`;
+
+  if (!onlineStaff.length) {
+    onlineStaffList.innerHTML = `
+      <div style="padding:10px; color:#64748b;">当前没有在线老师</div>
+    `;
+    return;
+  }
+
+  onlineStaff.forEach(staff => {
+    const item = document.createElement("div");
+    item.className = "staff-item";
+    item.innerHTML = `
+      <div class="staff-left">
+        <div class="avatar">${staff.name?.charAt(0) || "教"}</div>
+        <div>
+          <div><strong>${escapeHtml(staff.name || "")}</strong></div>
+          <div>${languageMap[staff.targetLang] || ""}</div>
+        </div>
+      </div>
+      <span class="online-badge">在线</span>
+    `;
+    onlineStaffList.appendChild(item);
+  });
+}
+
+// ===============================
+// 10. 语言自动识别
+// ===============================
+async function detectLanguage(text) {
+  const prompt = `
+Identify the language of the user's message.
+Only return one language code from this list:
+zh, ko, en, uz, mn
+`;
+
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${GROQ_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      temperature: 0,
+      messages: [
+        { role: "system", content: prompt },
+        { role: "user", content: text }
+      ]
+    })
+  });
+
+  const data = await response.json();
+  const lang = data.choices?.[0]?.message?.content?.trim();
+  return ["zh", "ko", "en", "uz", "mn"].includes(lang) ? lang : "zh";
+}
+
+// ===============================
+// 10. 事件
 // ===============================
 enterRoomBtn.addEventListener("click", () => {
   const name = nameInput.value.trim();
@@ -291,13 +450,13 @@ enterRoomBtn.addEventListener("click", () => {
     return;
   }
 
-  currentUser = {
-    role: roleSelect.value,
-    name,
-    sourceLang: sourceLanguage.value,
-    targetLang: targetLanguage.value,
-    entered: true
-  };
+currentUser = {
+  id: currentUser.id || ("user_" + Date.now()),
+  role: roleSelect.value,
+  name,
+  targetLang: targetLanguage.value,
+  entered: false
+};
 
   updateCurrentUserInfo();
   renderMessages();
@@ -320,12 +479,14 @@ sendBtn.addEventListener("click", async () => {
   sendBtn.textContent = "翻译中...";
 
   try {
+    const detectedLang = await detectLanguage(text);
+
     const newMessage = {
       senderName: currentUser.name,
       senderRole: currentUser.role,
       originalText: text,
-      originalLanguage: currentUser.sourceLang,
-      translations: await buildTranslations(text, currentUser.sourceLang),
+      originalLanguage: detectedLang,
+      translations: await buildTranslations(text, detectedLang),
       time: getCurrentTime(),
       createdAt: Date.now()
     };
@@ -354,9 +515,23 @@ quickButtons.forEach(button => {
   });
 });
 
+targetLanguage.addEventListener("change", async () => {
+  currentUser.targetLang = targetLanguage.value;
+  updateCurrentUserInfo();
+  renderMessages();
+
+  if (currentRoomId && currentUser.id) {
+    await update(ref(db, `rooms/${currentRoomId}/members/${currentUser.id}`), {
+      targetLang: currentUser.targetLang
+    });
+  }
+});
+
 // ===============================
-// 10. 启动
+// 11. 启动
 // ===============================
-renderOnlineStaff();
 updateCurrentUserInfo();
-listenMessages();
+listenRoomList();
+renderMessages();
+
+createRoomBtn.addEventListener("click", createRoom);
