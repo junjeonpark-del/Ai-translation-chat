@@ -89,6 +89,22 @@ body {
   height: 100%;
 }
 
+.mobile-sidebar-toggle-wrap {
+  display: none;
+}
+
+.mobile-sidebar-toggle {
+  width: 100%;
+  border: none;
+  background: #0f172a;
+  color: #fff;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .sidebar {
   overflow-y: auto;
   padding-right: 4px;
@@ -509,5 +525,16 @@ textarea:focus {
 
   .input-bottom .primary-btn {
     width: 100%;
+  }
+    .mobile-sidebar-toggle-wrap {
+    display: block;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .sidebar.mobile-open {
+    display: flex;
   }
 }
