@@ -282,6 +282,31 @@ textarea:focus {
   margin-left: auto;
 }
 
+.message-card.system {
+  max-width: 100%;
+  margin: 8px auto;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  text-align: center;
+  font-size: 13px;
+  border: 1px dashed #cbd5e1;
+}
+
+.message-card.system .message-top {
+  display: none;
+}
+
+.message-card.system .message-original {
+  display: none;
+}
+
+.message-card.system .message-text {
+  font-size: 13px;
+  color: #64748b;
+}
+
 .message-top {
   display: flex;
   align-items: center;
