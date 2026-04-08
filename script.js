@@ -146,8 +146,14 @@ function renderMessages() {
 
   messages.forEach(message => {
     const card = document.createElement("div");
-    const isMine = message.senderId && currentUser.id && message.senderId === currentUser.id;
-    card.className = `message-card ${isMine ? "staff" : "student"}`;
+    const isSystem = message.senderRole === "system";
+const isMine = message.senderId && currentUser.id && message.senderId === currentUser.id;
+
+if (isSystem) {
+  card.className = "message-card system";
+} else {
+  card.className = `message-card ${isMine ? "staff" : "student"}`;
+}
 
     const roleText = message.senderRole === "staff" ? "STAFF" : "STUDENT";
     const displayedText = getDisplayedText(message);
