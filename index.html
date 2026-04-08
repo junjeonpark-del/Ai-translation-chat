@@ -25,6 +25,21 @@
     <main class="main-layout">
       <aside class="sidebar">
         <section class="panel">
+          <div class="panel">
+  <h2>创建房间</h2>
+  <label class="form-label">房间名称</label>
+  <input id="roomNameInput" class="form-control" type="text" placeholder="例如：AI专业助教咨询室" />
+
+  <label class="form-label">房间分类</label>
+  <input id="roomCategoryInput" class="form-control" type="text" placeholder="例如：AI / 综合 / 酒店航空" />
+
+  <button id="createRoomBtn" class="primary-btn">创建房间</button>
+</div>
+
+<div class="panel">
+  <h2>房间列表</h2>
+  <div id="roomList"></div>
+</div>
           <h2>进入咨询室</h2>
 
           <label class="form-label">身份</label>
@@ -35,15 +50,6 @@
 
           <label class="form-label">姓名 / 昵称</label>
           <input id="nameInput" class="form-control" type="text" placeholder="请输入姓名或昵称" />
-
-          <label class="form-label">发送语言</label>
-          <select id="sourceLanguage" class="form-control">
-            <option value="zh">中文</option>
-            <option value="ko">한국어</option>
-            <option value="en">English</option>
-            <option value="uz">Oʻzbekcha</option>
-            <option value="mn">Монгол</option>
-          </select>
 
           <label class="form-label">接收语言</label>
           <select id="targetLanguage" class="form-control">
