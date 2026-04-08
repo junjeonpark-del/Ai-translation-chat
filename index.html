@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI 实时翻译聊天室</title>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
+    <style>
+/* 1. 核心修正：锁定全屏，并允许 JS 动态改高度 */
+html, body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden; 
+    position: fixed;  /* 锁死视口，不让网页乱飘 */
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    background-color: #121212;
+    color: white;
+    font-family: sans-serif;
+    /* 关键：增加这一行，让 body 高度可以被键盘顶上去 */
+    transition: height 0.1s ease-out; 
+}
+
+/* 2. 头部：高度固定 */
+#header {
+    height: 60px;
+    padding: 0 15px;
+    background: #1f1f1f;
+    border-bottom: 1px solid #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0; /* 确保不被压缩 */
+}
+
+/* 3. 聊天区域：自动撑开，内部滚动 */
+#chat-box {
+    flex: 1; 
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch; /* iOS 丝滑滚动 */
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    /* 【核心修正】防止键盘弹出时内容溢出或滚动条失效 */
+    overscroll-behavior-y: contain; 
+}
+
+/* 4. 底部输入区：永远贴地，适配键盘弹出 */
+#controls {
+    padding: 10px;
+    /* 核心：确保在 iPhone 这种全面屏底部有足够间距，不被小横条挡住 */
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    background: #1f1f1f;
+    border-top: 1px solid #333;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    /* 关键：键盘弹出时高度绝对不缩水，不消失 */
+    flex-shrink: 0; 
+    /* 确保它永远浮在聊天内容上方 */
+    z-index: 100;
+}
+
+/* 5. 输入框：防止 iOS 自动放大 */
+input, select {
+    background: #333;
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 20px;
+    font-size: 16px; /* 关键！必须是 16px，否则 iOS 点进去会突然放大画面 */
+}
+
+#text-input {
+    flex: 1;
+    /* 核心修改：让输入框变窄、更精致 */
+    height: 36px; 
+    padding: 0 15px;
+    background: #333;
+    color: white;
+    border: none;
+    border-radius: 18px; /* 圆角等于高度的一半，形成完美的胶囊形状 */
+    font-size: 16px;
+    outline: none;
+    box-sizing: border-box; /* 保证 padding 不会撑大总高度 */
+}
+
+        
+/* 1. 基础气泡容器 */
+.msg {
+    max-width: 80%;
+    margin-bottom: 12px;
+    padding: 10px 15px;
+    border-radius: 18px;
+    line-height: 1.4;
+    display: flex;
+    flex-direction: column;
+    word-wrap: break-word;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    color: white;
+}
+
+/* 2. 我发送的消息（右侧，蓝色） */
+.me {
+    align-self: flex-end;
+    background-color: #007AFF;
+    border-bottom-right-radius: 2px;
+}
+
+/* 3. 别人发送的消息（左侧，深灰） */
+.them {
+    align-self: flex-start;
+    background-color: #333;
+    border-bottom-left-radius: 2px;
+}
+
+/* 4. 下面那个带线的小字（原文） */
+.lang-tag {
+    display: block;
+    font-size: 13px;
+    margin-top: 5px;
+    opacity: 0.8;
+    border-top: 1px solid rgba(255,255,255,0.2);
+    padding-top: 4px;
+}
+
+    #qr-btn {
+    background: rgba(255, 255, 255, 0.1); /* 这种半透明色在深色模式下很高级 */
+    color: #00d2ff; /* 亮蓝色文字，醒目但不刺眼 */
+    border: 1px solid rgba(0, 210, 255, 0.3);
+    padding: 4px 12px;
+    border-radius: 15px; /* 胶囊形状 */
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+#qr-btn:active {
+    transform: scale(0.9); /* 点击时缩小的反馈感 */
+}
+        /* 彻底清除选择框的蓝色高亮和残留干扰 */
+select {
+    outline: none !important; /* 强制去掉所有边框线 */
+    -webkit-tap-highlight-color: transparent; /* 去掉 Safari 点击时的灰色/蓝色阴影 */
+}
+
+select:focus {
+    outline: none !important;
+    box-shadow: none !important;
+}
+    </style>
+
+</head>
+<body>
+
+<div id="header">
+    <div>
+        <select id="my-lang">
+            <option value="zh-CN">我讲中文</option>
+            <option value="ko-KR">한국어</option>
+            <option value="en-US">English</option>
+        </select>
+        <span> ➔ </span>
+        <select id="target-lang">
+            <option value="English">看英文</option>
+            <option value="Chinese">看中文</option>
+            <option value="Korean">看韩文</option>
+        </select>
+    </div>
+    <button id="qr-btn" onclick="showQR()">扫码加入</button>
+</div>
+
+<div id="chat-box"></div>
+
+<div id="controls">
+    <input type="text" id="text-input" placeholder="输入文字..." 
+           onkeypress="if(event.key==='Enter') sendText()" 
+           inputmode="search">
+           
+<button id="mic-btn">🎤</button>
+</div>
+
+<div id="qr-modal" onclick="this.style.display='none'" 
+     style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; 
+            background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center; flex-direction:column;">
+    
+    <div id="qrcode" style="background: white; padding: 20px; border-radius: 10px;"></div>
+    <p style="margin-top: 20px; color: white; font-weight: bold;">让对方扫码加入房间</p>
+    <p style="color: #ccc; font-size: 12px;">(点击屏幕任何地方关闭)</p>
+</div>
+
+    
+<script>
+    var recognition;
+    // --- 1. Firebase 配置 (保持不变) ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyA6PDYEk7Epsu52maMlVSzzv5f_yMkcjFg",
+        authDomain: "fanyi-6e1bf.firebaseapp.com",
+        databaseURL: "https://fanyi-6e1bf-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "fanyi-6e1bf",
+        storageBucket: "fanyi-6e1bf.firebasestorage.app",
+        messagingSenderId: "794186472934",
+        appId: "1:794186472934:web:54c39fda3a6ec5fe84ca27",
+        measurementId: "G-P7K3JG97BJ"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    const roomId = window.location.hash || "#room_" + Math.random().toString(36).substr(2, 5);
+    window.location.hash = roomId;
+    const chatRef = database.ref('rooms/' + roomId.replace('#', ''));
+
+// 1. 定义一个全局变量，但初始化为 null
+let currentRecognition = null;
+
+function startMic() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert("浏览器不支持语音，请用 Safari 或 Chrome");
+        return;
+    }
+
+    // 【修复 1】如果上一个没关掉，强行关掉并清空，防止实例堆叠
+    if (currentRecognition) {
+        try { currentRecognition.stop(); } catch(e) {}
+        currentRecognition = null;
+    }
+
+    // 【修复 2】针对 iOS 强制激活音频上下文
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    currentRecognition = new SpeechRecognition();
+    
+    // 确保读取的是标准代码 (如 zh-CN)，而不是中文名称
+    currentRecognition.lang = document.getElementById('my-lang').value;
+    currentRecognition.continuous = false;
+    currentRecognition.interimResults = false;
+
+    currentRecognition.onstart = function() {
+        console.log("🎤 录音正式开始...");
+        document.getElementById('mic-btn').innerHTML = "🔴";
+    };
+
+    currentRecognition.onresult = function(event) {
+        const text = event.results[0][0].transcript;
+        console.log("✅ 抓到文字:", text);
+        document.getElementById('text-input').value = text;
+    };
+
+    // 【修复 3】增加错误监听，这是抓 Bug 的核心
+    currentRecognition.onerror = function(event) {
+        console.error("❌ 语音错误:", event.error);
+        // 如果报 'network'，说明手机网络环境不支持苹果的语音云服务
+        if (event.error === 'network') {
+            alert("语音识别需要网络连接，请检查网络或尝试更换网络(5G/WiFi)");
+        }
+    };
+
+    currentRecognition.onend = function() {
+        console.log("⏹️ 录音自然结束");
+        document.getElementById('mic-btn').innerHTML = "🎤";
+        currentRecognition = null; // 彻底释放
+    };
+
+    try {
+        currentRecognition.start();
+    } catch (e) {
+        console.log("语音启动失败:", e);
+    }
+}
+
+function stopMic() {
+    if (currentRecognition) {
+        currentRecognition.stop();
+        currentRecognition = null;
+    }
+}
+    // --- 3. 二维码功能 (找回来了！) ---
+function showQR() {
+    // 1. 让弹窗显示出来（flex 配合上面的居中样式）
+    document.getElementById('qr-modal').style.display = 'flex';
+    // 2. 清空并生成
+    document.getElementById('qrcode').innerHTML = "";
+    new QRCode(document.getElementById("qrcode"), window.location.href);
+}
+
+    // --- 4. 翻译逻辑 (Groq API) ---
+    async function translateText(text, targetLang) {
+        const GROQ_API_KEY = "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";
+        const url = "https://api.groq.com/openai/v1/chat/completions";
+        const payload = {
+            model: "llama-3.3-70b-versatile",
+            messages: [
+                { role: "system", content: `You are a professional translator. Translate to ${targetLang}. Return ONLY the translated text.` },
+                { role: "user", content: text }
+            ],
+            temperature: 0.1
+        };
+
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Authorization": "Bearer " + GROQ_API_KEY,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            return data.choices[0].message.content.trim();
+        } catch (e) {
+            return "[翻译出错]";
+        }
+    }
+
+    // --- 5. 发送与消息展示 ---
+    async function processAndSend(rawText) {
+        if (!rawText) return;
+        const targetValue = document.getElementById('target-lang').value; 
+        // 映射下拉框的值到 Groq 识别的语言名
+        const langMap = { "English": "English", "Chinese": "Chinese", "Korean": "Korean" };
+        const targetLang = langMap[targetValue] || targetValue;
+
+        const translated = await translateText(rawText, targetLang);
+        
+        chatRef.push({
+            senderId: localStorage.getItem('userId') || (localStorage.setItem('userId', Date.now()), Date.now()),
+            original: rawText,
+            translated: translated,
+            timestamp: Date.now()
+        });
+    }
+
+    function sendText() {
+        const input = document.getElementById('text-input');
+        processAndSend(input.value);
+        input.value = "";
+    }
+
+// --- 5.5 解决移动端键盘遮挡的“终极黑科技” ---
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+        // 1. 获取键盘弹起后，真正能看到的屏幕高度
+        const vh = window.visualViewport.height;
+        
+        // 2. 核心：强制 body 的高度等于这个可视高度
+        // 这样底部的 #controls 就会像坐电梯一样被顶到键盘上方
+        document.body.style.height = vh + 'px';
+        
+        // 3. 让聊天框自动滚到底部看最新消息
+        setTimeout(() => {
+            const box = document.getElementById('chat-box');
+            if (box) box.scrollTop = box.scrollHeight;
+            // 解决 iOS 视口偏移导致点击失效的问题
+            window.scrollTo(0, 0);
+        }, 100);
+    });
+
+    // 针对 iOS 的补充：点击输入框时强制再触发一次
+    document.getElementById('text-input').addEventListener('focus', () => {
+        setTimeout(() => {
+            window.scrollTo(0, 0);
+        }, 300);
+    });
+}
+
+// 修改你原来的 showQR 函数，增加一个复位指令
+function showQR() {
+    document.getElementById('qr-modal').style.display = 'flex';
+    document.getElementById('qrcode').innerHTML = "";
+    new QRCode(document.getElementById("qrcode"), window.location.href);
+    // 弹出二维码时也确保页面不乱跳
+    window.scrollTo(0, 0);
+}
+    
+// --- 6. 实时监听新消息 (核心：让聊天动起来) ---
+    chatRef.limitToLast(20).on('child_added', (snapshot) => {
+        const data = snapshot.val();
+        const box = document.getElementById('chat-box');
+        
+        // 获取或生成自己的 ID
+        let userId = localStorage.getItem('userId');
+        if (!userId) {
+            userId = Date.now().toString();
+            localStorage.setItem('userId', userId);
+        }
+        
+        const isMe = data.senderId == userId;
+        
+        // 创建消息气泡
+        const msgDiv = document.createElement('div');
+        // 根据是不是自己发的，应用不同的 CSS 类（me 或 them）
+        msgDiv.className = `msg ${isMe ? 'me' : 'them'}`;
+        
+        // 气泡内部：翻译的大字 + 原文的小字
+        msgDiv.innerHTML = `
+            ${data.translated}
+            <span class="lang-tag">${data.original}</span>
+        `;
+        
+        // 添加到聊天框并自动滚动到底部
+        box.appendChild(msgDiv);
+        box.scrollTop = box.scrollHeight;
+    });
+// --- 5.9 针对手机 Safari 动画锁定的“暴力破解” ---
+document.querySelectorAll('select').forEach(sel => {
+    // 1. 核心：在选完语言的一瞬间，强制打断系统的收起动画
+    sel.addEventListener('change', function() {
+        this.blur(); // 视觉失焦
+        
+        // 【关键黑科技】利用异步 0 秒延迟，强制 Safari 在下一帧就恢复交互
+        setTimeout(() => {
+            window.scrollTo(window.scrollX, window.scrollY);
+            // 额外保险：给 body 刷一下焦点，彻底结束之前的弹窗状态
+            document.body.click(); 
+        }, 0);
+    });
+
+    // 2. 核心：在手指碰到右边的一瞬间，主动“清场”
+    sel.addEventListener('touchstart', function(e) {
+        // 如果当前有任何东西在“活跃”状态，强行掐断它
+        if (document.activeElement && document.activeElement !== this) {
+            document.activeElement.blur();
+        }
+        // 瞬间抢占焦点
+        this.focus();
+        // 阻止冒泡，不给系统留“思考”时间
+        e.stopPropagation();
+    }, { passive: true });
+});
+ 
+</script>
+</body>
+</html>
