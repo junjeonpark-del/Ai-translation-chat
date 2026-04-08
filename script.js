@@ -447,6 +447,19 @@ function listenMembersForRoom(roomId) {
       ...data[key]
     }));
     renderOnlineStaffReal();
+    function hasOnlineStaff() {
+  const now = Date.now();
+  const ACTIVE_LIMIT = 2 * 60 * 1000; // 2分钟内算在线
+
+  return members.some(member => {
+    const lastActiveAt = member.lastActiveAt || member.joinedAt || 0;
+    return (
+      member.role === "staff" &&
+      member.online === true &&
+      now - lastActiveAt < ACTIVE_LIMIT
+    );
+  });
+}
   });
 }
 // ===============================
@@ -594,11 +607,11 @@ const newMessage = {
     await sendMessageToFirebase(newMessage);
     messageInput.value = "";
 
-    if (currentUser.role === "student") {
-      setTimeout(() => {
-        autoReplyForStudent().catch(console.error);
-      }, 800);
-    }
+    if (currentUser.role === "student" && !hasOnlineStaff()) {
+  setTimeout(() => {
+    autoReplyForStudent().catch(console.error);
+  }, 800);
+}
   } catch (error) {
     console.error(error);
     alert(error.message || "发送失败");
