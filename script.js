@@ -329,10 +329,10 @@ function listenMessagesForRoom(roomId) {
         id: key,
         ...data[key]
       }))
-      .filter(message => {
-        if (!currentSessionJoinedAt) return true;
-        return (message.createdAt || 0) >= currentSessionJoinedAt;
-      })
+.filter(message => {
+  if (!currentSessionJoinedAt) return true;
+  return (message.createdAt || 0) >= (currentSessionJoinedAt - 2000);
+})
       .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 
     renderMessages();
@@ -544,7 +544,25 @@ async function joinRoom(roomId, roomInfo = {}) {
 
   updateCurrentUserInfo();
 
-  await sendSystemNotice(`${currentUser.name} 已进入房间`, roomId);
+  const enterNoticeMessage = {
+  senderId: "system_notice",
+  senderName: "系统通知",
+  senderRole: "system",
+  originalText: `${currentUser.name} 已进入房间`,
+  originalLanguage: "zh",
+  translations: {
+    zh: `${currentUser.name} 已进入房间`,
+    ko: `${currentUser.name} 已进入房间`,
+    en: `${currentUser.name} 已进入房间`,
+    uz: `${currentUser.name} 已进入房间`,
+    mn: `${currentUser.name} 已进入房间`
+  },
+  time: getCurrentTime(),
+  createdAt: Date.now()
+};
+
+await push(ref(db, `rooms/${roomId}/messages`), enterNoticeMessage);
+console.log("进入提示已直接写入 Firebase", roomId, currentUser.name);
 
   if (window.innerWidth <= 960 && sidebar) {
     sidebar.classList.remove("mobile-open");
