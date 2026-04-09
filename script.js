@@ -155,7 +155,6 @@ function renderMessages() {
   messages.forEach(message => {
     const card = document.createElement("div");
     const isSystem = message.senderRole === "system";
-const isMine = message.senderId && currentUser.id && message.senderId === currentUser.id;
 
 if (isSystem) {
   card.className = "message-card system";
@@ -290,6 +289,29 @@ function listenMessagesForRoom(roomId) {
     stopMessagesListener();
     stopMessagesListener = null;
   }
+
+  async function sendSystemNotice(text, roomId = currentRoomId) {
+  if (!roomId) return;
+
+  const noticeMessage = {
+    senderId: "system_notice",
+    senderName: "系统通知",
+    senderRole: "system",
+    originalText: text,
+    originalLanguage: "zh",
+    translations: {
+      zh: text,
+      ko: text,
+      en: text,
+      uz: text,
+      mn: text
+    },
+    time: getCurrentTime(),
+    createdAt: Date.now()
+  };
+
+  await push(ref(db, `rooms/${roomId}/messages`), noticeMessage);
+}
 
   const currentRoomRef = ref(db, `rooms/${roomId}/messages`);
 
@@ -714,29 +736,6 @@ const newMessage = {
   setTimeout(() => {
     autoReplyForStudent().catch(console.error);
   }, 800);
-}
-
-async function sendSystemNotice(text, roomId = currentRoomId) {
-  if (!roomId) return;
-
-  const noticeMessage = {
-    senderId: "system_notice",
-    senderName: "系统通知",
-    senderRole: "system",
-    originalText: text,
-    originalLanguage: "zh",
-    translations: {
-      zh: text,
-      ko: text,
-      en: text,
-      uz: text,
-      mn: text
-    },
-    time: getCurrentTime(),
-    createdAt: Date.now()
-  };
-
-  await push(ref(db, `rooms/${roomId}/messages`), noticeMessage);
 }
     
   } catch (error) {
