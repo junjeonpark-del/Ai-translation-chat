@@ -5,7 +5,8 @@ import {
   push,
   onValue,
   set,
-  update
+  update,
+  onDisconnect
 } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-database.js";
 
 // ===============================
@@ -92,6 +93,7 @@ let currentUser = {
 let currentRoomId = null;
 let currentRoomInfo = null;
 let currentRoomMemberRef = null;
+let currentDisconnectHandler = null;
 
 function saveUserToLocal() {
   localStorage.setItem("consult_user", JSON.stringify({
@@ -362,7 +364,7 @@ function startPresenceHeartbeat() {
     } catch (e) {
       console.error("心跳更新失败", e);
     }
-  }, 30000);
+  }, 15000);
 }
 
 // ===============================
@@ -458,6 +460,14 @@ async function joinRoom(roomId, roomInfo = {}) {
   }
 
   if (currentRoomId && currentUser.id && currentRoomId !== roomId) {
+  if (currentDisconnectHandler) {
+    try {
+      await currentDisconnectHandler.cancel();
+    } catch (e) {
+      console.error("取消旧断开监听失败", e);
+    }
+  }
+
   await markCurrentUserOffline(true);
 }
 
@@ -486,6 +496,11 @@ async function joinRoom(roomId, roomInfo = {}) {
   });
 
   currentRoomMemberRef = ref(db, `rooms/${roomId}/members/${currentUser.id}`);
+  currentDisconnectHandler = onDisconnect(currentRoomMemberRef);
+  await currentDisconnectHandler.update({
+  online: false,
+  lastActiveAt: Date.now()
+});
 
   listenMessagesForRoom(roomId);
   listenMembersForRoom(roomId);
@@ -493,7 +508,14 @@ async function joinRoom(roomId, roomInfo = {}) {
   updateCurrentUserInfo();
   renderMessages();
 
-  await sendSystemNotice(`${currentUser.name} 已进入房间`);
+  setTimeout(async () => {
+  try {
+    await sendSystemNotice(`${currentUser.name} 已进入房间`, roomId);
+    console.log("已发送进入提示", currentUser.name, roomId);
+  } catch (e) {
+    console.error("进入提示发送失败", e);
+  }
+}, 300);
   console.log("已发送进入提示", currentUser.name, currentRoomId);
     if (window.innerWidth <= 960 && sidebar) {
     sidebar.classList.remove("mobile-open");
@@ -524,7 +546,7 @@ function listenMembersForRoom(roomId) {
 }
 function hasOnlineStaff() {
   const now = Date.now();
-  const ACTIVE_LIMIT = 2 * 60 * 1000; // 2分钟内算在线
+  const ACTIVE_LIMIT = 40 * 1000; // 2分钟内算在线
 
   return members.some(member => {
     const lastActiveAt = member.lastActiveAt || member.joinedAt || 0;
@@ -543,7 +565,7 @@ function renderOnlineStaffReal() {
   onlineStaffList.innerHTML = "";
 
   const now = Date.now();
-  const ACTIVE_LIMIT = 2 * 60 * 1000; // 2分钟内算在线
+  const ACTIVE_LIMIT = 40 * 1000; // 2分钟内算在线
 
   const activeMembers = members.filter(member => {
     const lastActiveAt = member.lastActiveAt || member.joinedAt || 0;
@@ -687,8 +709,8 @@ const newMessage = {
   }, 800);
 }
 
-    async function sendSystemNotice(text) {
-  if (!currentRoomId) return;
+async function sendSystemNotice(text, roomId = currentRoomId) {
+  if (!roomId) return;
 
   const noticeMessage = {
     senderId: "system_notice",
@@ -707,7 +729,7 @@ const newMessage = {
     createdAt: Date.now()
   };
 
-  await sendMessageToFirebase(noticeMessage);
+  await push(ref(db, `rooms/${roomId}/messages`), noticeMessage);
 }
     
   } catch (error) {
