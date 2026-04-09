@@ -93,6 +93,7 @@ let currentUser = {
 let currentRoomId = null;
 let currentRoomInfo = null;
 let currentRoomMemberRef = null;
+let currentSessionJoinedAt = 0;
 let currentDisconnectHandler = null;
 
 function saveUserToLocal() {
@@ -306,6 +307,10 @@ function listenMessagesForRoom(roomId) {
         id: key,
         ...data[key]
       }))
+      .filter(message => {
+        if (!currentSessionJoinedAt) return true;
+        return (message.createdAt || 0) >= currentSessionJoinedAt;
+      })
       .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 
     renderMessages();
@@ -460,16 +465,19 @@ async function joinRoom(roomId, roomInfo = {}) {
   }
 
   if (currentRoomId && currentUser.id && currentRoomId !== roomId) {
-  if (currentDisconnectHandler) {
-    try {
-      await currentDisconnectHandler.cancel();
-    } catch (e) {
-      console.error("取消旧断开监听失败", e);
+    if (currentDisconnectHandler) {
+      try {
+        await currentDisconnectHandler.cancel();
+      } catch (e) {
+        console.error("取消旧断开监听失败", e);
+      }
     }
+
+    await markCurrentUserOffline(true);
   }
 
-  await markCurrentUserOffline(true);
-}
+  const joinedAt = Date.now();
+  currentSessionJoinedAt = joinedAt;
 
   currentUser = {
     id: currentUser.id || localStorage.getItem("consult_user_id") || ("user_" + Date.now()),
@@ -486,38 +494,37 @@ async function joinRoom(roomId, roomInfo = {}) {
   currentRoomInfo = roomInfo;
   updateCurrentRoomInfo(roomId, roomInfo);
 
+  // 切房间时先清空本地显示，避免看到旧房间残留
+  messages = [];
+  members = [];
+  renderMessages();
+  renderOnlineStaffReal();
+
+  listenMessagesForRoom(roomId);
+  listenMembersForRoom(roomId);
+
   await set(ref(db, `rooms/${roomId}/members/${currentUser.id}`), {
     name: currentUser.name,
     role: currentUser.role,
     targetLang: currentUser.targetLang,
     online: true,
-    joinedAt: Date.now(),
-    lastActiveAt: Date.now()
+    joinedAt: joinedAt,
+    lastActiveAt: joinedAt
   });
 
   currentRoomMemberRef = ref(db, `rooms/${roomId}/members/${currentUser.id}`);
+
   currentDisconnectHandler = onDisconnect(currentRoomMemberRef);
   await currentDisconnectHandler.update({
-  online: false,
-  lastActiveAt: Date.now()
-});
-
-  listenMessagesForRoom(roomId);
-  listenMembersForRoom(roomId);
+    online: false,
+    lastActiveAt: Date.now()
+  });
 
   updateCurrentUserInfo();
-  renderMessages();
 
-  setTimeout(async () => {
-  try {
-    await sendSystemNotice(`${currentUser.name} 已进入房间`, roomId);
-    console.log("已发送进入提示", currentUser.name, roomId);
-  } catch (e) {
-    console.error("进入提示发送失败", e);
-  }
-}, 300);
-  console.log("已发送进入提示", currentUser.name, currentRoomId);
-    if (window.innerWidth <= 960 && sidebar) {
+  await sendSystemNotice(`${currentUser.name} 已进入房间`, roomId);
+
+  if (window.innerWidth <= 960 && sidebar) {
     sidebar.classList.remove("mobile-open");
     if (mobileSidebarToggle) {
       mobileSidebarToggle.textContent = "房间与身份设置";
