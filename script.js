@@ -156,8 +156,10 @@ const isMine = message.senderId && currentUser.id && message.senderId === curren
 
 if (isSystem) {
   card.className = "message-card system";
+} else if (message.senderRole === "staff") {
+  card.className = "message-card staff";
 } else {
-  card.className = `message-card ${isMine ? "staff" : "student"}`;
+  card.className = "message-card student";
 }
 
     const roleText =
@@ -308,11 +310,35 @@ function listenMessagesForRoom(roomId) {
   });
 }
 
-async function markCurrentUserOffline() {
+async function markCurrentUserOffline(sendLeaveNotice = false) {
   if (!currentRoomId || !currentUser.id) return;
 
+  const oldRoomId = currentRoomId;
+  const leaveName = currentUser.name || "匿名";
+
   try {
-    await update(ref(db, `rooms/${currentRoomId}/members/${currentUser.id}`), {
+    if (sendLeaveNotice) {
+      const noticeMessage = {
+        senderId: "system_notice",
+        senderName: "系统通知",
+        senderRole: "system",
+        originalText: `${leaveName} 已离开房间`,
+        originalLanguage: "zh",
+        translations: {
+          zh: `${leaveName} 已离开房间`,
+          ko: `${leaveName} 已离开房间`,
+          en: `${leaveName} 已离开房间`,
+          uz: `${leaveName} 已离开房间`,
+          mn: `${leaveName} 已离开房间`
+        },
+        time: getCurrentTime(),
+        createdAt: Date.now()
+      };
+
+      await push(ref(db, `rooms/${oldRoomId}/messages`), noticeMessage);
+    }
+
+    await update(ref(db, `rooms/${oldRoomId}/members/${currentUser.id}`), {
       online: false,
       lastActiveAt: Date.now()
     });
@@ -432,8 +458,8 @@ async function joinRoom(roomId, roomInfo = {}) {
   }
 
   if (currentRoomId && currentUser.id && currentRoomId !== roomId) {
-    await markCurrentUserOffline();
-  }
+  await markCurrentUserOffline(true);
+}
 
   currentUser = {
     id: currentUser.id || localStorage.getItem("consult_user_id") || ("user_" + Date.now()),
@@ -468,6 +494,7 @@ async function joinRoom(roomId, roomInfo = {}) {
   renderMessages();
 
   await sendSystemNotice(`${currentUser.name} 已进入房间`);
+  console.log("已发送进入提示", currentUser.name, currentRoomId);
     if (window.innerWidth <= 960 && sidebar) {
     sidebar.classList.remove("mobile-open");
     if (mobileSidebarToggle) {
@@ -727,6 +754,32 @@ nameInput.addEventListener("input", () => {
 // ===============================
 // 11. 启动
 // ===============================
+window.addEventListener("pagehide", () => {
+  if (currentRoomId && currentUser.id) {
+    const leaveNotice = {
+      senderId: "system_notice",
+      senderName: "系统通知",
+      senderRole: "system",
+      originalText: `${currentUser.name || "匿名"} 已离开房间`,
+      originalLanguage: "zh",
+      translations: {
+        zh: `${currentUser.name || "匿名"} 已离开房间`,
+        ko: `${currentUser.name || "匿名"} 已离开房间`,
+        en: `${currentUser.name || "匿名"} 已离开房间`,
+        uz: `${currentUser.name || "匿名"} 已离开房间`,
+        mn: `${currentUser.name || "匿名"} 已离开房间`
+      },
+      time: getCurrentTime(),
+      createdAt: Date.now()
+    };
+
+    navigator.sendBeacon?.(
+      `${firebaseConfig.databaseURL}rooms/${currentRoomId}/messages.json`,
+      JSON.stringify(leaveNotice)
+    );
+  }
+});
+
 window.addEventListener("beforeunload", () => {
   if (currentRoomId && currentUser.id) {
     navigator.sendBeacon?.(
