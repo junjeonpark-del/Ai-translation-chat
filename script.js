@@ -10,10 +10,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-database.js";
 
 // ===============================
-// 1. Groq 配置（测试版直连）
+// 1. 后端接口地址
 // ===============================
-const GROQ_API_KEY = "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";
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+const API_BASE_URL = "http://localhost:3000";
 
 // ===============================
 // 2. Firebase 配置
@@ -220,56 +219,25 @@ function getCurrentTime() {
 async function translateSingle(text, sourceLang, targetLang) {
   if (sourceLang === targetLang) return text;
 
-  const prompt = `
-You are a precise translation engine.
-Translate the user's message from ${languageNameMap[sourceLang] || sourceLang} to ${languageNameMap[targetLang] || targetLang}.
-
-Rules:
-1. Only output the translated text.
-2. Do not explain.
-3. Keep names, numbers, and school terms accurate.
-4. Keep the tone natural and polite.
-`;
-
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const response = await fetch(`${API_BASE_URL}/api/translate`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${GROQ_API_KEY}`
+      "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: GROQ_MODEL,
-      temperature: 0.2,
-      messages: [
-        { role: "system", content: prompt },
-        { role: "user", content: text }
-      ]
+      text,
+      sourceLang,
+      targetLang
     })
   });
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Groq 请求失败：${response.status} ${errText}`);
+    throw new Error(`翻译请求失败：${response.status} ${errText}`);
   }
 
   const data = await response.json();
-  return data.choices?.[0]?.message?.content?.trim() || text;
-}
-
-async function buildTranslations(text, sourceLang) {
-  const langs = ["zh", "ko", "en", "uz", "mn"];
-  const result = {};
-
-  for (const lang of langs) {
-    try {
-      result[lang] = await translateSingle(text, sourceLang, lang);
-    } catch (error) {
-      console.error(`翻译 ${lang} 失败`, error);
-      result[lang] = text;
-    }
-  }
-
-  return result;
+  return data.translatedText || text;
 }
 
 // ===============================
@@ -661,36 +629,12 @@ function updateCurrentRoomInfo(roomId, roomInfo = {}) {
 // 10. 语言自动识别
 // ===============================
 async function detectLanguage(text) {
-  const prompt = `
-Identify the language of the user's message.
-Return only one code from this list:
-zh
-ko
-en
-uz
-mn
-
-Rules:
-1. Output only the code.
-2. No explanation.
-3. No punctuation.
-4. No extra words.
-`;
-
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const response = await fetch(`${API_BASE_URL}/api/detect-language`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${GROQ_API_KEY}`
+      "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      temperature: 0,
-      messages: [
-        { role: "system", content: prompt },
-        { role: "user", content: text }
-      ]
-    })
+    body: JSON.stringify({ text })
   });
 
   if (!response.ok) {
@@ -699,20 +643,8 @@ Rules:
   }
 
   const data = await response.json();
-  let lang = data.choices?.[0]?.message?.content?.trim().toLowerCase() || "";
-
-  // 清洗返回内容，防止出现 "ko."、"Korean"、"The answer is ko"
-  lang = lang.replace(/[^a-z]/g, "");
-
-  if (lang.includes("korean")) lang = "ko";
-  if (lang.includes("chinese")) lang = "zh";
-  if (lang.includes("english")) lang = "en";
-  if (lang.includes("uzbek")) lang = "uz";
-  if (lang.includes("mongolian")) lang = "mn";
-
-  return ["zh", "ko", "en", "uz", "mn"].includes(lang) ? lang : "zh";
+  return data.language || "zh";
 }
-
 // ===============================
 // 10. 事件
 // ===============================
