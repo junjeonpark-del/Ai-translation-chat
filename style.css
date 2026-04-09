@@ -548,6 +548,7 @@ textarea:focus {
     bottom: 0;
     z-index: 5;
   }
+}
 
   @media (max-height: 820px) {
   body {
@@ -570,6 +571,5 @@ textarea:focus {
   .chat-messages {
     max-height: 360px;
   }
-}
-  
+
 }
