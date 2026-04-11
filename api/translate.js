@@ -12,20 +12,24 @@ const languageNameMap = {
   mn: "Mongolian"
 };
 
-export async function POST(request) {
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method Not Allowed" });
+  }
+
   try {
-    const { text, sourceLang, targetLang } = await request.json();
+    const { text, sourceLang, targetLang } = req.body || {};
 
     if (!text || !String(text).trim()) {
-      return Response.json({ error: "text is required" }, { status: 400 });
+      return res.status(400).json({ error: "text is required" });
     }
 
     if (!targetLang) {
-      return Response.json({ error: "targetLang is required" }, { status: 400 });
+      return res.status(400).json({ error: "targetLang is required" });
     }
 
     if (sourceLang === targetLang) {
-      return Response.json({ translatedText: text });
+      return res.status(200).json({ translatedText: text });
     }
 
     const response = await client.chat.completions.create({
@@ -57,9 +61,9 @@ Rules:
     const translatedText =
       response.choices?.[0]?.message?.content?.trim() || text;
 
-    return Response.json({ translatedText });
+    return res.status(200).json({ translatedText });
   } catch (error) {
     console.error("translate error:", error);
-    return Response.json({ error: "Translation failed." }, { status: 500 });
+    return res.status(500).json({ error: "Translation failed." });
   }
 }
