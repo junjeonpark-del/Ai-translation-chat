@@ -615,7 +615,7 @@ async function validateStaffLogin() {
 async function translateSingle(text, sourceLang, targetLang) {
   if (sourceLang === targetLang) return text;
 
-  const response = await fetch(`${API_BASE_URL}/api/translate`, {
+  const response = await fetch(`${API_BASE_URL}/translate`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
