@@ -4,12 +4,16 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-export async function POST(request) {
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method Not Allowed" });
+  }
+
   try {
-    const { text } = await request.json();
+    const { text } = req.body || {};
 
     if (!text || !String(text).trim()) {
-      return Response.json({ error: "text is required" }, { status: 400 });
+      return res.status(400).json({ error: "text is required" });
     }
 
     const response = await client.chat.completions.create({
@@ -52,9 +56,9 @@ Rules:
       lang = "zh";
     }
 
-    return Response.json({ language: lang });
+    return res.status(200).json({ language: lang });
   } catch (error) {
     console.error("detect-language error:", error);
-    return Response.json({ error: "Language detection failed." }, { status: 500 });
+    return res.status(500).json({ error: "Language detection failed." });
   }
 }
