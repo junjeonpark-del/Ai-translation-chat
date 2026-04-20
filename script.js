@@ -48,6 +48,8 @@ const targetLanguage = document.getElementById("targetLanguage");
 const staffLoginBox = document.getElementById("staffLoginBox");
 const staffUsernameInput = document.getElementById("staffUsernameInput");
 const staffPasswordInput = document.getElementById("staffPasswordInput");
+const staffLoginBtn = document.getElementById("staffLoginBtn");
+const staffLoginStatus = document.getElementById("staffLoginStatus");
 
 const adminPanel = document.getElementById("adminPanel");
 const adminStaffUsernameInput = document.getElementById("adminStaffUsernameInput");
@@ -352,7 +354,9 @@ let currentRoomMemberRef = null;
 let currentSessionJoinedAt = 0;
 let currentDisconnectHandler = null;
 let currentStaffAccount = null;
+let currentStaffAuthenticated = false;
 let stopStaffAccountsListener = null;
+let editingStaffUsername = null;
 
 function saveUserToLocal() {
   localStorage.setItem("consult_user", JSON.stringify({
@@ -484,12 +488,16 @@ function updateStaffLoginVisibility() {
   if (roleSelect.value === "staff") {
     staffLoginBox.style.display = "block";
     studentNameBox.style.display = "none";
-    if (nameInput) nameInput.value = "";
   } else {
     staffLoginBox.style.display = "none";
     studentNameBox.style.display = "block";
+
+    currentStaffAuthenticated = false;
+    currentStaffAccount = null;
+
     if (staffUsernameInput) staffUsernameInput.value = "";
     if (staffPasswordInput) staffPasswordInput.value = "";
+    if (staffLoginStatus) staffLoginStatus.textContent = "未登录";
   }
 }
 function updateAdminPanelVisibility() {
@@ -580,6 +588,7 @@ async function validateStaffLogin() {
 
     if (!snapshot.exists()) {
       alert("老师账号不存在。");
+      currentStaffAuthenticated = false;
       return false;
     }
 
@@ -587,11 +596,13 @@ async function validateStaffLogin() {
 
     if (account.active !== true) {
       alert("该老师账号未启用。");
+      currentStaffAuthenticated = false;
       return false;
     }
 
     if (account.password !== password) {
       alert("老师账号或密码错误。");
+      currentStaffAuthenticated = false;
       return false;
     }
 
@@ -599,17 +610,26 @@ async function validateStaffLogin() {
       username,
       ...account
     };
+    currentStaffAuthenticated = true;
 
-    if (account.name && !nameInput.value.trim()) {
-      nameInput.value = account.name;
+    if (account.name) {
+      currentUser.name = account.name;
+      if (nameInput) nameInput.value = account.name;
     }
 
+    if (staffLoginStatus) {
+      staffLoginStatus.textContent = `已登录：${account.name || username}`;
+    }
+
+    updateCurrentUserInfo();
     updateAdminPanelVisibility();
     listenStaffAccounts();
 
+    alert("老师登录成功。");
     return true;
   } catch (error) {
     console.error("老师账号验证失败", error);
+    currentStaffAuthenticated = false;
     alert("老师账号验证失败，请稍后重试。");
     return false;
   }
@@ -889,11 +909,11 @@ async function joinRoom(roomId, roomInfo = {}) {
   let name = nameInput.value.trim();
 
   if (roleSelect.value === "staff") {
-    const ok = await validateStaffLogin();
-    if (!ok) {
+    if (!currentStaffAuthenticated || !currentStaffAccount) {
+      alert("请先点击“老师登录”完成登录。");
       return;
     }
-    name = nameInput.value.trim();
+    name = currentStaffAccount.name || nameInput.value.trim();
   } else {
     if (!name) {
       alert("请先输入姓名");
@@ -1200,9 +1220,12 @@ targetLanguage.addEventListener("change", async () => {
 
 roleSelect.addEventListener("change", () => {
   currentUser.role = roleSelect.value;
+
   if (currentUser.role !== "staff") {
     currentStaffAccount = null;
+    currentStaffAuthenticated = false;
   }
+
   updateAdminPanelVisibility();
   saveUserToLocal();
   updateCurrentUserInfo();
@@ -1281,6 +1304,11 @@ if (mobileSidebarToggle && sidebar) {
 }
 
 createRoomBtn.addEventListener("click", createRoom);
+if (staffLoginBtn) {
+  staffLoginBtn.addEventListener("click", async () => {
+    await validateStaffLogin();
+  });
+}
 
 if (saveStaffAccountBtn) {
   saveStaffAccountBtn.addEventListener("click", async () => {
