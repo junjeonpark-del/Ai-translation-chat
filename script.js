@@ -41,6 +41,7 @@ const nameInput = document.getElementById("nameInput");
 const studentNameBox = document.getElementById("studentNameBox");
 const roomNameInput = document.getElementById("roomNameInput");
 const roomCategoryInput = document.getElementById("roomCategoryInput");
+const createRoomPanel = document.getElementById("createRoomPanel");
 const createRoomBtn = document.getElementById("createRoomBtn");
 const roomList = document.getElementById("roomList");
 const targetLanguage = document.getElementById("targetLanguage");
@@ -492,12 +493,14 @@ function updateStaffLoginVisibility() {
   }
 }
 function updateAdminPanelVisibility() {
-  if (!adminPanel) return;
+  if (!adminPanel || !createRoomPanel) return;
 
   if (currentUser.role === "staff" && currentStaffAccount?.isAdmin === true) {
     adminPanel.style.display = "block";
+    createRoomPanel.style.display = "block";
   } else {
     adminPanel.style.display = "none";
+    createRoomPanel.style.display = "none";
   }
 }
 
@@ -817,6 +820,11 @@ async function autoReplyForStudent() {
 // 9. 创建房间
 // ===============================
 async function createRoom() {
+  if (!currentStaffAccount?.isAdmin) {
+    alert("只有管理员可以创建房间。");
+    return;
+  }
+
   const roomName = roomNameInput.value.trim();
   const roomCategory = roomCategoryInput.value.trim();
 
@@ -1194,8 +1202,8 @@ roleSelect.addEventListener("change", () => {
   currentUser.role = roleSelect.value;
   if (currentUser.role !== "staff") {
     currentStaffAccount = null;
-    updateAdminPanelVisibility();
   }
+  updateAdminPanelVisibility();
   saveUserToLocal();
   updateCurrentUserInfo();
   updateStaffLoginVisibility();
