@@ -76,6 +76,7 @@ const displayLanguageLabel = document.getElementById("displayLanguageLabel");
 const quickButtons = document.querySelectorAll(".quick-btn");
 const uiLanguageSelect = document.getElementById("uiLanguageSelect");
 const mobileSidebarToggle = document.getElementById("mobileSidebarToggle");
+const mobileSidebarBackdrop = document.getElementById("mobileSidebarBackdrop");
 const sidebar = document.getElementById("sidebar");
 
 // ===============================
@@ -316,12 +317,7 @@ setText("uiCurrentTargetLangPrefix", t.currentTargetLangPrefix);
   if (quickButtons[3]) quickButtons[3].textContent = t.quickWork;
   if (quickButtons[4]) quickButtons[4].textContent = t.quickAttendance;
 
-  if (mobileSidebarToggle && !sidebar.classList.contains("mobile-open")) {
-    mobileSidebarToggle.textContent = t.mobileSidebarClosed;
-  }
-  if (mobileSidebarToggle && sidebar.classList.contains("mobile-open")) {
-    mobileSidebarToggle.textContent = t.mobileSidebarOpen;
-  }
+  syncMobileSidebarUI();
 
   listenRoomList();
   renderOnlineStaffReal();
@@ -330,6 +326,32 @@ setText("uiCurrentTargetLangPrefix", t.currentTargetLangPrefix);
   if (currentRoomId) {
     updateCurrentRoomInfo(currentRoomId, currentRoomInfo || {});
   }
+}
+
+function syncMobileSidebarUI() {
+  if (!mobileSidebarToggle || !sidebar) return;
+
+  const currentUILang = localStorage.getItem("ui_lang") || "zh";
+  const t = uiText[currentUILang] || uiText.zh;
+  const isOpen = sidebar.classList.contains("mobile-open");
+
+  mobileSidebarToggle.textContent = isOpen
+    ? t.mobileSidebarOpen
+    : t.mobileSidebarClosed;
+  mobileSidebarToggle.setAttribute("aria-controls", "sidebar");
+  mobileSidebarToggle.setAttribute("aria-expanded", String(isOpen));
+
+  if (mobileSidebarBackdrop) {
+    mobileSidebarBackdrop.classList.toggle("active", isOpen);
+  }
+
+  document.body.classList.toggle("mobile-sidebar-active", isOpen && window.innerWidth <= 960);
+}
+
+function setMobileSidebarOpen(isOpen) {
+  if (!sidebar) return;
+  sidebar.classList.toggle("mobile-open", isOpen);
+  syncMobileSidebarUI();
 }
 
 const languageNameMap = {
@@ -1000,10 +1022,7 @@ await push(ref(db, `rooms/${roomId}/messages`), enterNoticeMessage);
 console.log("进入提示已直接写入 Firebase", roomId, currentUser.name);
 
   if (window.innerWidth <= 960 && sidebar) {
-    sidebar.classList.remove("mobile-open");
-    if (mobileSidebarToggle) {
-      mobileSidebarToggle.textContent = "房间与身份设置";
-    }
+    setMobileSidebarOpen(false);
   }
 }
 // ===============================
@@ -1292,16 +1311,32 @@ startPresenceHeartbeat();
 
 if (mobileSidebarToggle && sidebar) {
   mobileSidebarToggle.addEventListener("click", () => {
-    sidebar.classList.toggle("mobile-open");
-
-    const currentUILang = localStorage.getItem("ui_lang") || "zh";
-    const t = uiText[currentUILang] || uiText.zh;
-
-    mobileSidebarToggle.textContent = sidebar.classList.contains("mobile-open")
-      ? t.mobileSidebarOpen
-      : t.mobileSidebarClosed;
+    setMobileSidebarOpen(!sidebar.classList.contains("mobile-open"));
   });
 }
+
+if (mobileSidebarBackdrop) {
+  mobileSidebarBackdrop.addEventListener("click", () => {
+    setMobileSidebarOpen(false);
+  });
+}
+
+if (sidebar) {
+  new MutationObserver(() => {
+    syncMobileSidebarUI();
+  }).observe(sidebar, {
+    attributes: true,
+    attributeFilter: ["class"]
+  });
+}
+
+window.addEventListener("resize", () => {
+  if (window.innerWidth > 960) {
+    setMobileSidebarOpen(false);
+  } else {
+    syncMobileSidebarUI();
+  }
+});
 
 createRoomBtn.addEventListener("click", createRoom);
 if (staffLoginBtn) {
